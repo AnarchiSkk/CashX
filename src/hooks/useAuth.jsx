@@ -10,7 +10,7 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         if (!isSupabaseConfigured()) {
-            // Guest mode by default when Supabase is not configured
+            // Guest mode by default when Supabase is not configured or no user
             const guestData = localStorage.getItem('cashx_guest');
             if (guestData) {
                 setUser(JSON.parse(guestData));
@@ -22,15 +22,39 @@ export function AuthProvider({ children }) {
 
         // Get initial session
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null);
-            setIsGuest(false);
+            if (session?.user) {
+                setUser(session.user);
+                setIsGuest(false);
+            } else {
+                 // Check for guest if not logged in
+                const guestData = localStorage.getItem('cashx_guest');
+                if (guestData) {
+                    setUser(JSON.parse(guestData));
+                    setIsGuest(true);
+                }
+            }
             setLoading(false);
         });
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null);
-            setIsGuest(false);
+            if (session?.user) {
+                setUser(session.user);
+                setIsGuest(false);
+            } else {
+                // Determine if we should fall back to guest or just be null
+                // Ideally, on sign out, we might want to clear user or go to guest
+               if (!session) {
+                   const guestData = localStorage.getItem('cashx_guest');
+                   if (guestData) {
+                       setUser(JSON.parse(guestData));
+                       setIsGuest(true);
+                   } else {
+                       setUser(null);
+                       setIsGuest(false);
+                   }
+               }
+            }
         });
 
         return () => subscription.unsubscribe();

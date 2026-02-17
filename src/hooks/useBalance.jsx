@@ -60,11 +60,16 @@ export function BalanceProvider({ children }) {
             return newBalance;
         }
 
-        if (user && isSupabaseConfigured()) {
-            await supabase
+        if (user && !isGuest && isSupabaseConfigured()) {
+            const { error } = await supabase
                 .from('profiles')
                 .update({ balance: newBalance })
                 .eq('id', user.id);
+
+            if (error) {
+                console.error('Error updating balance:', error);
+                // Revert local state if DB update fails? For now, we trust the DB eventually.
+            }
         }
 
         return newBalance;
