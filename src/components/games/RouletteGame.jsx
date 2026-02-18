@@ -44,51 +44,12 @@ export default function RouletteGame() {
     const [autoPlaying, setAutoPlaying] = useState(false);
     const [showCoinRain, setShowCoinRain] = useState(false);
     const autoRef = useRef(false);
+    const autoTimeoutRef = useRef(null);
     const lastBetsRef = useRef({});
 
     const totalBet = Object.values(bets).reduce((a, b) => a + b, 0);
 
-    const placeBet = (betId) => {
-        if (spinning || chipValue > balance - totalBet) return;
-        setBets(prev => ({ ...prev, [betId]: (prev[betId] || 0) + chipValue }));
-    };
-
-    const placeNumberBet = (num) => {
-        if (spinning || chipValue > balance - totalBet) return;
-        setBets(prev => ({ ...prev, [`num_${num}`]: (prev[`num_${num}`] || 0) + chipValue }));
-    };
-
-    const clearBets = () => {
-        if (spinning) return;
-        setBets({});
-    };
-
-    const checkWin = useCallback((num) => {
-        let totalWinnings = 0;
-        const color = getNumberColor(num);
-
-        Object.entries(bets).forEach(([betId, amount]) => {
-            let won = false;
-
-            if (betId === 'red' && color === 'red') won = true;
-            if (betId === 'black' && color === 'black') won = true;
-            if (betId === 'odd' && num > 0 && num % 2 === 1) won = true;
-            if (betId === 'even' && num > 0 && num % 2 === 0) won = true;
-            if (betId === 'low' && num >= 1 && num <= 18) won = true;
-            if (betId === 'high' && num >= 19 && num <= 36) won = true;
-            if (betId === 'dozen1' && num >= 1 && num <= 12) won = true;
-            if (betId === 'dozen2' && num >= 13 && num <= 24) won = true;
-            if (betId === 'dozen3' && num >= 25 && num <= 36) won = true;
-            if (betId === `num_${num}`) won = true;
-
-            if (won) {
-                const payout = betId.startsWith('num_') ? 35 : (BET_TYPES.find(b => b.id === betId)?.payout || 1);
-                totalWinnings += amount + (amount * payout);
-            }
-        });
-
-        return totalWinnings;
-    }, [bets]);
+    // ... (keep lines 51-135 same as original until the end of spin function)
 
     const spin = useCallback(() => {
         if (totalBet === 0 || spinning) return;
@@ -107,6 +68,9 @@ export default function RouletteGame() {
         const degreesPerSlot = 360 / WHEEL_ORDER.length;
         const targetAngle = 360 * 5 + (360 - numberIndex * degreesPerSlot);
         setWheelRotation(prev => prev + targetAngle);
+
+        // Clear previous timeout if any
+        if (autoTimeoutRef.current) clearTimeout(autoTimeoutRef.current);
 
         setTimeout(() => {
             setResult(winningNumber);
@@ -133,25 +97,39 @@ export default function RouletteGame() {
             trackGame('roulette', winnings > 0, winnings);
             setBets({});
 
+            // STRICT Check for auto-play
             if (autoRef.current) {
                 setBets(lastBetsRef.current);
-                setTimeout(() => spin(), 2000);
+                autoTimeoutRef.current = setTimeout(() => {
+                    if (autoRef.current) spin();
+                }, 2000);
             }
         }, 4500);
     }, [totalBet, spinning, bets, numbers, checkWin, removeCoins, addCoins, trackGame]);
 
     const toggleAuto = useCallback(() => {
         if (autoRef.current) {
+            // STOPPING
             autoRef.current = false;
             setAutoPlaying(false);
+            if (autoTimeoutRef.current) {
+                clearTimeout(autoTimeoutRef.current);
+                autoTimeoutRef.current = null;
+            }
         } else {
+            // STARTING
             autoRef.current = true;
             setAutoPlaying(true);
             if (!spinning && totalBet > 0) spin();
         }
     }, [spinning, totalBet, spin]);
 
-    useEffect(() => { return () => { autoRef.current = false; }; }, []);
+    useEffect(() => {
+        return () => {
+            autoRef.current = false;
+            if (autoTimeoutRef.current) clearTimeout(autoTimeoutRef.current);
+        };
+    }, []);
 
     // Table layout: 3 rows x 12 columns
     const tableNumbers = [];

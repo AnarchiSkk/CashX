@@ -1,77 +1,23 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { useBalance } from '../hooks/useBalance';
+import { usePlayTime } from '../hooks/usePlayTime';
+import { useAuth } from '../hooks/useAuth';
 
-const packs = [
-    {
-        id: 'starter',
-        name: 'Pack Starter',
-        amount: 500,
-        icon: '🎁',
-        color: 'from-emerald-500/20 to-emerald-600/20',
-        border: 'border-emerald-500/20',
-        description: 'Un petit boost pour commencer',
-        tag: 'Gratuit',
-    },
-    {
-        id: 'lucky',
-        name: 'Pack Lucky',
-        amount: 2000,
-        icon: '🍀',
-        color: 'from-green-500/20 to-teal-600/20',
-        border: 'border-green-500/20',
-        description: 'La chance va tourner en votre faveur',
-        tag: 'Populaire',
-    },
-    {
-        id: 'high_roller',
-        name: 'Pack High Roller',
-        amount: 5000,
-        icon: '💎',
-        color: 'from-blue-500/20 to-indigo-600/20',
-        border: 'border-blue-500/20',
-        description: 'Pour les joueurs ambitieux',
-        tag: 'Premium',
-    },
-    {
-        id: 'vip',
-        name: 'Pack VIP',
-        amount: 15000,
-        icon: '👑',
-        color: 'from-gold-400/20 to-gold-600/20',
-        border: 'border-gold-500/20',
-        description: 'Le pack ultime des champions',
-        tag: 'Exclusif',
-    },
-    {
-        id: 'whale',
-        name: 'Pack Whale',
-        amount: 50000,
-        icon: '🐋',
-        color: 'from-purple-500/20 to-pink-600/20',
-        border: 'border-purple-500/20',
-        description: 'Dominez la compétition',
-        tag: 'Légendaire',
-    },
-    {
-        id: 'daily',
-        name: 'Bonus Quotidien',
-        amount: 100,
-        icon: '📅',
-        color: 'from-orange-500/20 to-red-600/20',
-        border: 'border-orange-500/20',
-        description: 'Revenez chaque jour',
-        tag: 'Quotidien',
-    },
-];
+// ... (keep imports)
 
 export default function Boutique() {
     const { addCoins } = useBalance();
+    const { user, isGuest } = useAuth();
+    const { timeSinceLastClaim, claimReward } = usePlayTime();
+
+    // Config for loyalty reward
+    const REWARD_INTERVAL_MINUTES = 30;
+    const REWARD_AMOUNT = 500;
+
     const [claimedPacks, setClaimedPacks] = useState(() => {
         const saved = localStorage.getItem('cashx_claimed_packs');
         return saved ? JSON.parse(saved) : [];
     });
     const [showSuccess, setShowSuccess] = useState(null);
+    const [rewardLoading, setRewardLoading] = useState(false);
 
     useEffect(() => {
         localStorage.setItem('cashx_claimed_packs', JSON.stringify(claimedPacks));
@@ -86,7 +32,29 @@ export default function Boutique() {
         setTimeout(() => setShowSuccess(null), 2000);
     };
 
+    const handleLoyaltyClaim = async () => {
+        if (rewardLoading) return;
+        setRewardLoading(true);
+        const { data, error } = await claimReward(REWARD_AMOUNT, REWARD_INTERVAL_MINUTES);
+
+        if (data) {
+            addCoins(REWARD_AMOUNT); // Update local balance immediately
+            setShowSuccess('loyalty');
+            setTimeout(() => setShowSuccess(null), 2000);
+        } else {
+            alert(error || 'Erreur');
+        }
+        setRewardLoading(false);
+    };
+
     const isClaimed = (packId) => claimedPacks.includes(packId);
+
+    // Calculate progress for loyalty
+    const secondsRequired = REWARD_INTERVAL_MINUTES * 60;
+    const progress = Math.min(100, (timeSinceLastClaim / secondsRequired) * 100);
+    const timeRemaining = Math.max(0, secondsRequired - timeSinceLastClaim);
+    const minutesLeft = Math.floor(timeRemaining / 60);
+    const secondsLeft = timeRemaining % 60;
 
     return (
         <div className="space-y-6">
@@ -103,6 +71,74 @@ export default function Boutique() {
                 </p>
             </motion.div>
 
+            {/* Loyalty Reward Section */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="glass-strong rounded-2xl p-6 border border-gold-500/20 relative overflow-hidden"
+            >
+                <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <i className="ph-fill ph-clock text-9xl text-gold-400"></i>
+                </div>
+
+                <div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center shadow-glow-gold">
+                        <i className="ph-fill ph-gift text-3xl text-casino-dark"></i>
+                    </div>
+
+                    <div className="flex-1 text-center md:text-left">
+                        <h2 className="text-xl font-bold text-white">Récompense de Fidélité</h2>
+                        <p className="text-white/50 text-sm mt-1">
+                            Gagnez {REWARD_AMOUNT} X-Coins toutes les {REWARD_INTERVAL_MINUTES} minutes de présence !
+                        </p>
+
+                        {/* Progress Bar */}
+                        <div className="mt-3 h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                            <motion.div
+                                className="h-full bg-gradient-to-r from-gold-400 to-gold-600"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${progress}%` }}
+                                transition={{ duration: 1 }}
+                            />
+                        </div>
+                        <div className="text-right text-xs text-gold-400 mt-1 font-mono">
+                            {progress >= 100 ? 'Prêt à réclamer !' : `${minutesLeft}m ${secondsLeft}s restants`}
+                        </div>
+                    </div>
+
+                    <div>
+                        {!user || isGuest ? (
+                            <div className="text-xs text-white/30 text-center px-4 py-2 bg-white/5 rounded-lg border border-white/5">
+                                Connectez-vous pour<br />accéder aux récompenses
+                            </div>
+                        ) : (
+                            <button
+                                onClick={handleLoyaltyClaim}
+                                disabled={progress < 100 || rewardLoading}
+                                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg
+                                ${progress >= 100
+                                        ? 'bg-gradient-to-r from-gold-400 to-gold-600 text-casino-dark hover:scale-105 shadow-glow-gold cursor-pointer'
+                                        : 'bg-white/5 text-white/20 cursor-not-allowed'}`}
+                            >
+                                {rewardLoading ? '...' : (progress >= 100 ? 'Réclamer' : 'En attente')}
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Success animation for loyalty */}
+                {showSuccess === 'loyalty' && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="absolute bottom-4 right-4 bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg flex items-center gap-2"
+                    >
+                        <i className="ph-fill ph-check-circle"></i>
+                        +{REWARD_AMOUNT} X-Coins !
+                    </motion.div>
+                )}
+            </motion.div>
+
             {/* Info banner */}
             <motion.div
                 initial={{ opacity: 0 }}
@@ -110,6 +146,7 @@ export default function Boutique() {
                 transition={{ delay: 0.2 }}
                 className="glass rounded-2xl p-5 border border-gold-500/10 bg-gradient-to-r from-gold-500/5 to-transparent"
             >
+                {/* ... existing info banner content ... */}
                 <div className="flex items-center gap-3">
                     <i className="ph-light ph-info text-gold-400 text-2xl"></i>
                     <div>

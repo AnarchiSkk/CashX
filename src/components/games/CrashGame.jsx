@@ -22,7 +22,17 @@ export default function CrashGame() {
     const startTimeRef = useRef(null);
     const canvasRef = useRef(null);
 
+    // Auto-bet refs
+    const autoRef = useRef(false);
+    const autoTimeoutRef = useRef(null);
+
+    // Update ref when state changes
+    useEffect(() => {
+        autoRef.current = autoPlaying;
+    }, [autoPlaying]);
+
     const drawGraph = useCallback((currentMultiplier, crashed) => {
+        // ... (keep graph drawing logic same)
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
@@ -114,8 +124,13 @@ export default function CrashGame() {
                 setHistory(prev => [{ point: cp, won: false }, ...prev.slice(0, 9)]);
                 trackGame('crash', false, 0);
 
-                if (autoPlaying) {
-                    setTimeout(() => startGame(), 2000);
+                if (autoTimeoutRef.current) clearTimeout(autoTimeoutRef.current);
+
+                // CHECK REF
+                if (autoRef.current) {
+                    autoTimeoutRef.current = setTimeout(() => {
+                        if (autoRef.current) startGame();
+                    }, 2000);
                 }
                 return;
             }
@@ -133,7 +148,7 @@ export default function CrashGame() {
         };
 
         animRef.current = requestAnimationFrame(animate);
-    }, [betAmount, balance, autoCashout, autoPlaying, drawGraph, removeCoins, trackGame]);
+    }, [betAmount, balance, autoCashout, drawGraph, removeCoins, trackGame]);
 
     const cashOut = useCallback((currentMult) => {
         if (phase !== 'running' && !currentMult) return;
@@ -152,18 +167,27 @@ export default function CrashGame() {
             setShowCoinRain(true);
         }
 
-        if (autoPlaying) {
-            setTimeout(() => startGame(), 2000);
+        if (autoTimeoutRef.current) clearTimeout(autoTimeoutRef.current);
+
+        // CHECK REF
+        if (autoRef.current) {
+            autoTimeoutRef.current = setTimeout(() => {
+                if (autoRef.current) startGame();
+            }, 2000);
         }
-    }, [phase, multiplier, betAmount, addCoins, trackGame, autoPlaying, startGame]);
+    }, [phase, multiplier, betAmount, addCoins, trackGame, startGame]);
 
     useEffect(() => {
-        return () => cancelAnimationFrame(animRef.current);
+        return () => {
+            cancelAnimationFrame(animRef.current);
+            if (autoTimeoutRef.current) clearTimeout(autoTimeoutRef.current);
+        };
     }, []);
 
     const toggleAutoPlay = () => {
-        if (autoPlaying) {
+        if (autoRef.current) {
             setAutoPlaying(false);
+            if (autoTimeoutRef.current) clearTimeout(autoTimeoutRef.current);
         } else {
             setAutoPlaying(true);
             if (phase === 'betting') startGame();
@@ -328,9 +352,9 @@ export default function CrashGame() {
                                 {multiplier.toFixed(2)}x
                             </motion.div>
                             <p className={`text-sm mt-2 font-medium ${phase === 'crashed' ? 'text-red-400' :
-                                    phase === 'cashedout' ? 'text-gold-400' :
-                                        phase === 'running' ? 'text-emerald-400' :
-                                            'text-white/20'
+                                phase === 'cashedout' ? 'text-gold-400' :
+                                    phase === 'running' ? 'text-emerald-400' :
+                                        'text-white/20'
                                 }`}>
                                 {phase === 'crashed' ? '💥 Crash !' :
                                     phase === 'cashedout' ? `💰 +${profit} X-Coins !` :
