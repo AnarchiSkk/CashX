@@ -36,7 +36,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Catch-all route to serve index.html for SPA client-side routing
-app.get('(*)', (req, res) => {
+app.use((req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 app.listen(PORT, () => {
